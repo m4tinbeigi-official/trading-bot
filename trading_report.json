@@ -1,0 +1,38 @@
+{
+  "timestamp": "2026-09-12T21:13:09.803334",
+  "final_balance_usdt": 0.125,
+  "open_positions": {
+    "BTCUSDT": {
+      "symbol": "BTCUSDT",
+      "side": "BUY",
+      "entry_price": 77208.0,
+      "position_value": 950.0,
+      "amount": 0.012304424411978033,
+      "stop_loss": 76049.88,
+      "take_profit": 79910.28,
+      "open_time": "2026-09-12T21:12:36.469596"
+    },
+    "ETHUSDT": {
+      "symbol": "ETHUSDT",
+      "side": "BUY",
+      "entry_price": 2525.72,
+      "position_value": 47.5,
+      "amount": 0.018806518537288378,
+      "stop_loss": 2487.8342,
+      "take_profit": 2614.1201999999994,
+      "open_time": "2026-09-12T21:12:39.229938"
+    },
+    "SOLUSDT": {
+      "symbol": "SOLUSDT",
+      "side": "BUY",
+      "entry_price": 102.05,
+      "position_value": 2.375,
+      "amount": 0.023272905438510533,
+      "stop_loss": 100.51925,
+      "take_profit": 105.62174999999999,
+      "open_time": "2026-09-12T21:12:42.126143"
+    }
+  },
+  "trades_executed": 0,
+  "history": []
+}
