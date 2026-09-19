@@ -13,6 +13,13 @@ import ssl
 import urllib.request
 from datetime import datetime, timezone
 
+try:
+    import socks
+    from sockshandler import SocksiPyHandler
+    HAS_SOCKS = True
+except ImportError:
+    HAS_SOCKS = False
+
 class Config:
     INITIAL_CAPITAL_USD = 10000.0
     RISK_PER_TRADE_PCT = 1.0        # 1% per trade
@@ -56,34 +63,79 @@ class MarketScanner:
         self.ctx.verify_mode = ssl.CERT_NONE
         self.headers = {"User-Agent": "Mozilla/5.0"}
 
-    def get_crypto_candles(self, symbol="BTCUSDT", limit=100):
+        self.direct_opener = urllib.request.build_opener(
+            urllib.request.HTTPSHandler(context=self.ctx)
+        )
+        if HAS_SOCKS:
+            self.proxy_opener = urllib.request.build_opener(
+                SocksiPyHandler(socks.SOCKS5, '127.0.0.1', 10808, True),
+                urllib.request.HTTPSHandler(context=self.ctx)
+            )
+        else:
+            self.proxy_opener = self.direct_opener
+
+    def _fetch_json(self, url, timeout=8, prefer_proxy=False):
+        openers = [self.proxy_opener, self.direct_opener] if prefer_proxy else [self.direct_opener, self.proxy_opener]
+        for opener in openers:
+            try:
+                req = urllib.request.Request(url, headers=self.headers)
+                with opener.open(req, timeout=timeout) as resp:
+                    return json.loads(resp.read().decode('utf-8'))
+            except Exception:
+                continue
+        return None
+
+    def get_crypto_candles(self, symbol="BTCUSDT", limit=60):
         url = f"https://api.coinex.com/v2/spot/kline?market={symbol}&period=1hour&limit={limit}"
-        try:
-            req = urllib.request.Request(url, headers=self.headers)
-            with urllib.request.urlopen(req, context=self.ctx, timeout=8) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                if data and data.get("code") == 0:
-                    return [{
-                        "close": float(k["close"]),
-                        "high": float(k["high"]),
-                        "low": float(k["low"]),
-                        "open": float(k["open"]),
-                        "volume": float(k["volume"])
-                    } for k in data.get("data", [])]
-        except Exception:
-            pass
+        data = self._fetch_json(url, timeout=8, prefer_proxy=True)
+        if data and data.get("code") == 0:
+            return [{
+                "close": float(k["close"]),
+                "high": float(k["high"]),
+                "low": float(k["low"]),
+                "open": float(k["open"]),
+                "volume": float(k["volume"])
+            } for k in data.get("data", [])]
+        return []
+
+    def get_market_candles(self, symbol="XAUUSD", limit=60):
+        ticker_map = {
+            "XAUUSD": "GC=F",
+            "GOLD": "GC=F",
+            "US30": "^DJI",
+            "DOW": "^DJI"
+        }
+        ticker = ticker_map.get(symbol, symbol)
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range=5d&interval=1h"
+        data = self._fetch_json(url, timeout=8, prefer_proxy=True)
+        if data and "chart" in data and data["chart"].get("result"):
+            res = data["chart"]["result"][0]
+            quotes = res.get("indicators", {}).get("quote", [{}])[0]
+            closes = quotes.get("close", [])
+            highs = quotes.get("high", [])
+            lows = quotes.get("low", [])
+            opens = quotes.get("open", [])
+            volumes = quotes.get("volume", [])
+
+            candles = []
+            for i in range(len(closes)):
+                c = closes[i]
+                if c is not None:
+                    candles.append({
+                        "close": float(c),
+                        "high": float(highs[i]) if i < len(highs) and highs[i] is not None else float(c),
+                        "low": float(lows[i]) if i < len(lows) and lows[i] is not None else float(c),
+                        "open": float(opens[i]) if i < len(opens) and opens[i] is not None else float(c),
+                        "volume": float(volumes[i]) if i < len(volumes) and volumes[i] is not None else 0.0
+                    })
+            return candles[-limit:]
         return []
 
     def get_nobitex_toman_rate(self):
-        url = "https://api.nobitex.ir/market/stats"
-        try:
-            req = urllib.request.Request(url, headers=self.headers)
-            with urllib.request.urlopen(req, context=self.ctx, timeout=5) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                if data and "stats" in data:
-                    return float(data["stats"].get("usdt-rls", {}).get("latest", 0)) / 10.0
-        except Exception:
-            pass
+        url = "https://apiv2.nobitex.ir/market/stats"
+        data = self._fetch_json(url, timeout=5, prefer_proxy=False)
+        if data and "stats" in data:
+            return float(data["stats"].get("usdt-rls", {}).get("latest", 0)) / 10.0
         return 0.0
 
 class TechnicalStrategy:
@@ -117,10 +169,26 @@ class TechnicalStrategy:
 
 class MasterExecutionEngine:
     def __init__(self):
+        self.report_path = "/Users/ricksabchez/Desktop/trading-bot/trading_report.json"
         self.risk = RiskEngine(Config.INITIAL_CAPITAL_USD)
         self.scanner = MarketScanner()
         self.open_positions = {}
         self.trade_history = []
+        self._load_state()
+
+    def _load_state(self):
+        if os.path.exists(self.report_path):
+            try:
+                with open(self.report_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.risk.equity = float(data.get("total_equity_usd", Config.INITIAL_CAPITAL_USD))
+                    self.open_positions = data.get("open_positions", {})
+                    self.trade_history = data.get("trade_history", [])
+                    r_status = data.get("risk_status", {})
+                    self.risk.circuit_broken = r_status.get("circuit_broken", False)
+                    self.risk.consecutive_losses = r_status.get("consecutive_losses", 0)
+            except Exception:
+                pass
 
     def execute_market_cycle(self):
         print("=" * 70)
@@ -133,16 +201,23 @@ class MasterExecutionEngine:
         if toman_rate > 0:
             print(f"🇮🇷 Nobitex USDT/IRT: {toman_rate:,.0f} Toman")
 
-        # 2. Check Markets (US30 simulation + Crypto Live)
-        symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+        # 2. Check Markets (Crypto Live + Gold + Dow Jones)
+        crypto_symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+        traditional_symbols = ["XAUUSD", "US30"]
         
-        for sym in symbols:
+        all_targets = [("crypto", s) for s in crypto_symbols] + [("trad", s) for s in traditional_symbols]
+
+        for mtype, sym in all_targets:
             can_trade, reason = self.risk.can_trade()
             if not can_trade:
                 print(f"⚠️ Risk Guard Triggered: {reason}")
                 break
 
-            candles = self.scanner.get_crypto_candles(sym, limit=60)
+            if mtype == "crypto":
+                candles = self.scanner.get_crypto_candles(sym, limit=60)
+            else:
+                candles = self.scanner.get_market_candles(sym, limit=60)
+
             if not candles:
                 continue
 
@@ -150,7 +225,8 @@ class MasterExecutionEngine:
             cur_price = closes[-1]
             sma, upper, lower, rsi = TechnicalStrategy.calculate_bollinger_and_rsi(closes)
 
-            print(f"\n📊 [{sym:8}] Price: ${cur_price:,.2f} | RSI: {rsi:.1f} | LowerBB: ${lower:,.2f} | UpperBB: ${upper:,.2f}")
+            label = f"{sym} (Gold)" if sym == "XAUUSD" else (f"{sym} (Dow Jones)" if sym == "US30" else sym)
+            print(f"\n📊 [{label:18}] Price: ${cur_price:,.2f} | RSI: {rsi:.1f} | LowerBB: ${lower:,.2f} | UpperBB: ${upper:,.2f}")
 
             # Check open position
             if sym in self.open_positions:
@@ -201,9 +277,9 @@ class MasterExecutionEngine:
                 "consecutive_losses": self.risk.consecutive_losses
             }
         }
-        with open("/Users/ricksabchez/Desktop/trading-bot/trading_report.json", "w", encoding="utf-8") as f:
+        with open(self.report_path, "w", encoding="utf-8") as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
-        print(f"\n💾 Report updated: /Users/ricksabchez/Desktop/trading-bot/trading_report.json")
+        print(f"\n💾 Report updated: {self.report_path}")
 
 if __name__ == "__main__":
     engine = MasterExecutionEngine()
