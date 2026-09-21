@@ -1,8 +1,18 @@
 {
-  "timestamp": "2026-09-19T10:42:13.934874+00:00",
-  "total_equity_usd": 10000.0,
+  "timestamp": "2026-09-21T20:52:07.966302+00:00",
+  "total_equity_usd": 10120.55,
   "open_positions": {},
-  "trade_history": [],
+  "trade_history": [
+    {
+      "symbol": "SOLUSDT",
+      "side": "BUY",
+      "entry": 110.0,
+      "exit": 118.84,
+      "pnl_usd": 120.55,
+      "pnl_pct": 8.04,
+      "closed_at": "2026-09-21T20:52:05.343076+00:00"
+    }
+  ],
   "risk_status": {
     "circuit_broken": false,
     "consecutive_losses": 0
