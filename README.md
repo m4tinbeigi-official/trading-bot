@@ -55,8 +55,10 @@ trading-bot/
 ├── compounding_engine.py         # موتور رشد تصاعدی، هاف‌کلی و چرخ‌دنده قفل سود (Profit Ratchet)
 ├── treasury_manager.py           # مدیریت مستقل خزانه‌داری، پوشش هزینه‌های سرور و دفترکل
 ├── quant_fund_master.py          # ارکستریتور و هسته مرکزی صندوق کمی و الگوریتمی
-├── InstitutionalTraderPro.mq5    # سورس کد اصلی و کامل اکسپرت به زبان MQL5 (Ultra v5.50)
+├── InstitutionalTraderPro.mq5    # سورس کد اصلی و کامل اکسپرت به زبان MQL5 (Ultra v5.50 با تشخیص خودکار نمادهای آلپاری)
 ├── InstitutionalTraderPro.ex5    # فایل باینری کامپایل‌شده بدون خطا برای متاتریدر ۵
+├── alpari_integration.py         # پروفایل ادغام و ماتریس نمادهای اختصاصی بروکر آلپاری
+├── ALPARI_GUIDE_FA.md            # راهنمای جامع فارسی افتتاح حساب و راه‌اندازی در آلپاری
 ├── AutoTraderPro.mq5             # نسخه اسکنر سبد نمادها (Multi-Currency Scanner)
 ├── telegram_telemetry_bot.py     # بات تله‌متری پایتون و مانیتورینگ تلگرام
 ├── monte_carlo_stress_test.json  # نتایج آزمون استحکام مونت‌کارلو (۵,۰۰۰ شبیه‌سازی)
@@ -90,3 +92,6 @@ python3 treasury_manager.py
 ۱. فایل‌های `InstitutionalTraderPro.mq5` و `InstitutionalTraderPro.ex5` را داخل پوشه `MQL5/Experts` در پوشه داده‌های متاتریدر ۵ قرار دهید.
 ۲. گزینه **`Allow Algo Trading`** را در تب Common فعال کنید.
 ۳. ربات را روی چارت اجرا کنید تا پایش سبد ارزی و مدیریت خروج آغاز شود.
+
+### ۴. راهنمای اختصاصی آلپاری (Alpari)
+برای مشاهده آموزش گام‌به‌گام ثبت‌نام، واریز و برداشت ریالی/تتر و تنظیمات حساب ECN در آلپاری، به فایل **[ALPARI_GUIDE_FA.md](./ALPARI_GUIDE_FA.md)** مراجعه فرمایید.

@@ -231,7 +231,36 @@ void OnTick()
 }
 
 //+------------------------------------------------------------------+
-//| Multi-Asset Basket Parser                                        |
+//| Auto-resolve broker-specific symbol names (e.g. Alpari ECN/Pro)  |
+//+------------------------------------------------------------------+
+string ResolveBrokerSymbol(const string rawSymbol)
+{
+   if(SymbolInfoInteger(rawSymbol, SYMBOL_EXIST))
+      return rawSymbol;
+
+   string suffixes[] = {".ecn", ".pro", "_i", "m", ".m", ".raw", "_pro", ".a"};
+   for(int i = 0; i < ArraySize(suffixes); i++)
+   {
+      string candidate = rawSymbol + suffixes[i];
+      if(SymbolInfoInteger(candidate, SYMBOL_EXIST))
+         return candidate;
+   }
+
+   string chartSym = _Symbol;
+   int dotPos = StringFind(chartSym, ".");
+   if(dotPos > 0)
+   {
+      string suffix = StringSubstr(chartSym, dotPos);
+      string candidate = rawSymbol + suffix;
+      if(SymbolInfoInteger(candidate, SYMBOL_EXIST))
+         return candidate;
+   }
+
+   return rawSymbol;
+}
+
+//+------------------------------------------------------------------+
+//| Parse comma-separated basket symbols                             |
 //+------------------------------------------------------------------+
 void ParseBasketSymbols(const string csv)
 {
@@ -247,6 +276,7 @@ void ParseBasketSymbols(const string csv)
       StringTrimRight(s);
       if(StringLen(s) > 0)
       {
+         s = ResolveBrokerSymbol(s);
          ArrayResize(g_symbols, g_symbolCount + 1);
          g_symbols[g_symbolCount] = s;
          g_symbolCount++;
