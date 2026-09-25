@@ -27,10 +27,10 @@ class AutonomousTreasuryManager:
             "opex_balance_usd": 0.0,
             "monthly_burn_rate_usd": 38.0, # $10 VPS + $8 Proxy + $15 LLM API + $5 Domain
             "expenses": [
-                {"category": "Cloud VPS Hosting", "monthly_est": 10.0, "status": "ACTIVE"},
+                {"category": "Cloud VPS Hosting (ManageIt Cloud)", "monthly_est": 10.0, "status": "HOLD_NO_AUTOPAY"},
                 {"category": "SOCKS5 Proxy & Relays", "monthly_est": 8.0, "status": "ACTIVE"},
                 {"category": "v1m / 9Router AI Quotas", "monthly_est": 15.0, "status": "ACTIVE"},
-                {"category": "Domains & SSL Maintenance", "monthly_est": 5.0, "status": "ACTIVE"}
+                {"category": "Domains & SSL Renewal (Selva.ir)", "monthly_est": 5.0, "status": "ACTIVE"}
             ],
             "settlement_wallets": {
                 "USDT_TRC20": "TXYZAutonomousTradingTreasury999",
