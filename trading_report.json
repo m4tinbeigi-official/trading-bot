@@ -1,20 +1,66 @@
 {
-  "timestamp": "2026-09-21T20:52:07.966302+00:00",
-  "total_equity_usd": 10120.55,
-  "open_positions": {},
+  "timestamp": "2026-09-25T05:25:30.694236+00:00",
+  "total_equity_usd": 10067.4,
+  "open_positions": {
+    "XAUUSD": {
+      "symbol": "XAUUSD",
+      "side": "BUY",
+      "entry": 4351.5,
+      "size": 1516.3964999999998,
+      "sl": 4264.47,
+      "tp": 4503.8025,
+      "opened_at": "2026-09-22T07:56:34.241006+00:00"
+    },
+    "BTCUSDT": {
+      "symbol": "BTCUSDT",
+      "side": "BUY",
+      "entry": 83208.0,
+      "size": 1516.3964999999998,
+      "sl": 81543.84,
+      "tp": 86120.28,
+      "opened_at": "2026-09-24T09:35:54.055642+00:00"
+    }
+  },
   "trade_history": [
+    {
+      "symbol": "BTCUSDT",
+      "side": "BUY",
+      "entry": 80561.0,
+      "exit": 81255.0,
+      "pnl_usd": 12.92,
+      "pnl_pct": 0.86,
+      "closed_at": "2026-09-20T17:39:37.493215+00:00"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "side": "BUY",
+      "entry": 2593.76,
+      "exit": 2637.11,
+      "pnl_usd": 25.07,
+      "pnl_pct": 1.67,
+      "closed_at": "2026-09-20T17:39:39.260528+00:00"
+    },
     {
       "symbol": "SOLUSDT",
       "side": "BUY",
       "entry": 110.0,
-      "exit": 118.84,
-      "pnl_usd": 120.55,
-      "pnl_pct": 8.04,
-      "closed_at": "2026-09-21T20:52:05.343076+00:00"
+      "exit": 115.23,
+      "pnl_usd": 71.32,
+      "pnl_pct": 4.75,
+      "closed_at": "2026-09-21T08:58:48.017934+00:00"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "side": "BUY",
+      "entry": 2716.11,
+      "exit": 2641.05,
+      "pnl_usd": -41.91,
+      "pnl_pct": -2.76,
+      "closed_at": "2026-09-24T09:35:54.863967+00:00"
     }
   ],
   "risk_status": {
     "circuit_broken": false,
-    "consecutive_losses": 0
+    "consecutive_losses": 1
   }
 }

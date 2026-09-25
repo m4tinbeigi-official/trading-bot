@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rick Sanchez MT5 Quant Suite | داشبورد معاملاتی</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Vazirmatn:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <h1>RICK SANCHEZ <span class="accent-text">MT5 QUANT SUITE</span></h1>
+          <div class="subtitle">سیستم ترید الگوریتمی طلا، فارکس و شاخص‌ها | مدیریت ریسک استاندارد پراپ‌فرم</div>
+        </div>
+      </div>
+      
+      <!-- Market Sessions & Status -->
+      <div class="header-status">
+        <div class="session-badges">
+          <span class="session-badge" id="session-london">لندن (London)</span>
+          <span class="session-badge" id="session-ny">نیویورک (NY)</span>
+          <span class="session-badge" id="session-tokyo">توکیو (Tokyo)</span>
+        </div>
+        <div class="mode-badge paper" id="mode-badge">
+          <span class="dot"></span>
+          <span id="mode-text">🟡 PAPER SIMULATOR</span>
+        </div>
+        <div class="actions">
+          <button class="btn btn-secondary" id="btn-toggle-bot">
+            <span id="btn-toggle-icon">⏸️</span> <span id="btn-toggle-text">توقف ربات</span>
+          </button>
+          <button class="btn btn-danger" id="btn-panic">
+            🚨 خروج اضطراری (Panic Close)
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Circuit Breaker Alert Banner -->
+    <div class="alert-banner hidden" id="alert-banner">
+      ⚠️ <strong>هشدار مدارشکن ریسک:</strong> <span id="alert-msg"></span>
+    </div>
+
+    <!-- Metrics Row -->
+    <section class="metrics-grid">
+      <div class="card metric-card">
+        <div class="metric-title">بالانس حساب (Balance)</div>
+        <div class="metric-value" id="val-balance">$10,000.00</div>
+        <div class="metric-sub" id="sub-currency">USD | لوریج 1:100</div>
+      </div>
+      <div class="card metric-card">
+        <div class="metric-title">ارزش دارایی زنده (Equity)</div>
+        <div class="metric-value highlight" id="val-equity">$10,000.00</div>
+        <div class="metric-sub" id="sub-unrealized-pnl">سود باز: $0.00 (0.00%)</div>
+      </div>
+      <div class="card metric-card">
+        <div class="metric-title">مارجین آزاد (Free Margin)</div>
+        <div class="metric-value" id="val-margin-free">$10,000.00</div>
+        <div class="metric-sub" id="sub-margin-used">مارجین درگیر: $0.00</div>
+      </div>
+      <div class="card metric-card">
+        <div class="metric-title">دراوداون روزانه (Daily DD)</div>
+        <div class="metric-value safe" id="val-daily-dd">0.00%</div>
+        <div class="metric-sub">سقف مجاز: 4.50% (قانون پراپ)</div>
+      </div>
+      <div class="card metric-card">
+        <div class="metric-title">وین‌ریت و بازدهی (Win Rate)</div>
+        <div class="metric-value" id="val-win-rate">0%</div>
+        <div class="metric-sub" id="sub-trades-count">تعداد معاملات بسته: 0</div>
+      </div>
+    </section>
+
+    <!-- Market Watch Strip -->
+    <section class="market-strip" id="market-strip">
+      <div class="market-item">
+        <span class="symbol-name">XAUUSD (طلا)</span>
+        <span class="symbol-bid" id="price-xauusd-bid">--</span>
+        <span class="symbol-ask" id="price-xauusd-ask">--</span>
+      </div>
+      <div class="market-item">
+        <span class="symbol-name">EURUSD</span>
+        <span class="symbol-bid" id="price-eurusd-bid">--</span>
+        <span class="symbol-ask" id="price-eurusd-ask">--</span>
+      </div>
+      <div class="market-item">
+        <span class="symbol-name">GBPUSD</span>
+        <span class="symbol-bid" id="price-gbpusd-bid">--</span>
+        <span class="symbol-ask" id="price-gbpusd-ask">--</span>
+      </div>
+      <div class="market-item">
+        <span class="symbol-name">NAS100 (نزدک)</span>
+        <span class="symbol-bid" id="price-nas100-bid">--</span>
+        <span class="symbol-ask" id="price-nas100-ask">--</span>
+      </div>
+    </section>
+
+    <!-- Active Positions Table -->
+    <section class="card table-card">
+      <div class="card-header">
+        <h2>📊 پوزیشن‌های باز لحظه‌ای (Active Positions)</h2>
+        <span class="badge" id="positions-count">0 پوزیشن فعال</span>
+      </div>
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>تیکت</th>
+              <th>نماد</th>
+              <th>نوع</th>
+              <th>حجم (Lots)</th>
+              <th>قیمت ورود</th>
+              <th>قیمت فعلی</th>
+              <th>حد ضرر (SL)</th>
+              <th>حد سود (TP)</th>
+              <th>سود/زیان (PnL)</th>
+              <th>زمان ورود</th>
+            </tr>
+          </thead>
+          <tbody id="positions-tbody">
+            <tr>
+              <td colspan="10" class="empty-state">در حال حاضر هیچ پوزیشن بازی وجود ندارد.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Closed Trades History Table -->
+    <section class="card table-card">
+      <div class="card-header">
+        <h2>📜 تاریخچه معاملات اخیر (Closed Trades)</h2>
+        <span class="badge secondary" id="history-count">0 معامله</span>
+      </div>
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>تیکت</th>
+              <th>نماد</th>
+              <th>نوع</th>
+              <th>حجم</th>
+              <th>قیمت ورود</th>
+              <th>قیمت خروج</th>
+              <th>سود خالص ($)</th>
+              <th>دلیل خروج</th>
+              <th>زمان خروج</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody">
+            <tr>
+              <td colspan="9" class="empty-state">هنوز معامله‌ای بسته نشده است.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Live Event Feed Console -->
+    <section class="card console-card">
+      <div class="card-header">
+        <h2>💻 لاگ زنده سیستم و رویدادهای معاملاتی</h2>
+        <button class="btn-clean" id="btn-clear-logs">پاکسازی لاگ</button>
+      </div>
+      <div class="console-box" id="console-box">
+        <div class="log-line info">[SYSTEM] داشبورد نظارتی متاتریدر ۵ راه‌اندازی شد. در انتظار داده‌های وب‌سوکت...</div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div>Rick Sanchez MT5 Quant Engine v2.0 • Ultra-Lightweight IPC Architecture</div>
+      <div class="footer-note">طراحی شده برای عبور از چالش‌های پراپ‌فرم و حفاظت حداکثری از سرمایه</div>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,132 +1,139 @@
 """
-MetaTrader 5 Python Bridge for macOS & Linux
-Connects Python trading algorithms to MT5 Terminal via:
-1. ZeroMQ Socket (Fast Local IPC)
-2. MetaApi Cloud REST/WebSocket Gateway
-3. MT5 Web Terminal JSON Protocol
+MetaTrader 5 Python Bridge with Seamless Paper Simulator Fallback
+Connects to MT5 Terminal over ZeroMQ or falls back to built-in Paper Trading Engine.
+Zero heavy dependencies, 100% cross-platform compatible with macOS, Windows & Linux VPS.
 """
 
 import sys
 import json
-import time
-import zmq
 import logging
-from datetime import datetime
+import zmq
+from typing import Dict, Any, List, Optional
+from config import config
+from paper_simulator import PaperSimulator
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] [MT5-Bridge] %(message)s"
-)
 logger = logging.getLogger("MT5Bridge")
 
-class MT5Client:
-    def __init__(self, host="127.0.0.1", port_req=5555, port_sub=5556):
+class MT5Bridge:
+    def __init__(self, host: str = config.MT5_HOST, port: int = config.MT5_REQ_PORT):
         self.host = host
-        self.port_req = port_req
-        self.port_sub = port_sub
+        self.port = port
         self.context = zmq.Context()
         self.socket_req = None
-        self.socket_sub = None
-        self.connected = False
+        self.is_connected = False
+        self.simulator = PaperSimulator(initial_balance=config.INITIAL_BALANCE)
+        self.active_mode = "PAPER" # 'MT5' or 'PAPER'
 
-    def connect(self):
-        """Connects to ZeroMQ EA running inside MetaTrader 5"""
+    def connect(self) -> bool:
+        """Attempts connection to MetaTrader 5 Expert Advisor via ZeroMQ."""
+        if config.EXECUTION_MODE == "PAPER":
+            logger.info("ℹ️ Execution mode configured to PAPER. Using local simulator.")
+            self.active_mode = "PAPER"
+            return True
+
         try:
+            logger.info(f"🔌 Connecting to MT5 ZeroMQ EA at tcp://{self.host}:{self.port}...")
             self.socket_req = self.context.socket(zmq.REQ)
-            self.socket_req.setsockopt(zmq.RCVTIMEO, 3000)  # 3s timeout
-            self.socket_req.connect(f"tcp://{self.host}:{self.port_req}")
+            self.socket_req.setsockopt(zmq.RCVTIMEO, config.MT5_TIMEOUT_MS)
+            self.socket_req.setsockopt(zmq.LINGER, 0)
+            self.socket_req.connect(f"tcp://{self.host}:{self.port}")
             
-            # Test ping
-            response = self.send_command({"action": "PING"})
-            if response and response.get("status") == "OK":
-                self.connected = True
-                logger.info("✅ Successfully connected to MetaTrader 5 Terminal!")
+            # Send test ping
+            reply = self.send_command({"action": "PING"})
+            if reply and reply.get("status") == "OK":
+                self.is_connected = True
+                self.active_mode = "MT5"
+                logger.info("✅ Connected to MetaTrader 5 Terminal successfully!")
                 return True
             else:
-                logger.warning("⚠️ MT5 EA did not respond to PING (EA might not be attached to chart yet).")
+                logger.warning("⚠️ MT5 EA did not reply to PING. Activating fallback Paper Simulator.")
+                self.active_mode = "PAPER"
                 return False
         except Exception as e:
-            logger.error(f"Failed to connect to MT5 bridge: {e}")
+            logger.warning(f"⚠️ Could not reach MT5 EA ({e}). Defaulting to Paper Simulator mode.")
+            self.active_mode = "PAPER"
             return False
 
-    def send_command(self, payload):
-        """Sends command JSON to MT5 EA and waits for JSON reply"""
-        if not self.socket_req:
+    def send_command(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Sends JSON packet to MT5 EA and awaits reply."""
+        if self.active_mode == "PAPER" or not self.socket_req:
             return None
         try:
-            msg = json.dumps(payload)
-            self.socket_req.send_string(msg)
-            reply = self.socket_req.recv_string()
-            return json.loads(reply)
+            self.socket_req.send_string(json.dumps(payload))
+            msg = self.socket_req.recv_string()
+            return json.loads(msg)
         except zmq.Again:
-            logger.error("ZMQ request timed out.")
+            logger.warning("⚠️ MT5 ZMQ request timed out.")
             return None
         except Exception as e:
-            logger.error(f"Error sending command to MT5: {e}")
+            logger.error(f"Error communicating with MT5: {e}")
             return None
 
-    def get_account_info(self):
-        """Fetches account balance, equity, leverage, server, and currency"""
-        res = self.send_command({"action": "ACCOUNT_INFO"})
-        if res:
-            return res.get("data", {})
-        # Return fallback demo template if offline
-        return {
-            "login": "Demo Account",
-            "balance": 10000.0,
-            "equity": 10000.0,
-            "currency": "USD",
-            "leverage": 100,
-            "connected": self.connected
-        }
+    def get_account_info(self) -> Dict[str, Any]:
+        """Fetches account details (balance, equity, margin, leverage)."""
+        if self.active_mode == "MT5" and self.is_connected:
+            res = self.send_command({"action": "ACCOUNT_INFO"})
+            if res and "data" in res:
+                res["data"]["mode"] = "LIVE_MT5"
+                return res["data"]
+        return self.simulator.get_account_info()
 
-    def get_symbol_price(self, symbol="EURUSD"):
-        """Fetches current Ask/Bid for a symbol"""
-        res = self.send_command({"action": "GET_TICK", "symbol": symbol})
-        if res and "data" in res:
-            return res["data"]
-        return None
+    def get_symbol_price(self, symbol: str) -> Dict[str, float]:
+        """Fetches real-time Bid/Ask quote for a symbol."""
+        if self.active_mode == "MT5" and self.is_connected:
+            res = self.send_command({"action": "GET_TICK", "symbol": symbol})
+            if res and "data" in res:
+                return res["data"]
+        return self.simulator.simulate_price_step(symbol)
 
-    def open_order(self, symbol, order_type, lots, sl_price=0.0, tp_price=0.0, comment="Rick Trading Bot"):
-        """
-        order_type: 'BUY' or 'SELL'
-        """
-        payload = {
-            "action": "ORDER_OPEN",
-            "symbol": symbol,
-            "type": order_type.upper(),
-            "volume": float(lots),
-            "sl": float(sl_price),
-            "tp": float(tp_price),
-            "comment": comment
-        }
-        logger.info(f"📤 Sending Order: {order_type} {lots} Lots on {symbol} (SL: {sl_price}, TP: {tp_price})")
-        res = self.send_command(payload)
-        return res
+    def get_positions(self) -> List[Dict[str, Any]]:
+        """Retrieves list of active open positions."""
+        if self.active_mode == "MT5" and self.is_connected:
+            res = self.send_command({"action": "GET_POSITIONS"})
+            if res and "data" in res:
+                return res["data"]
+        return self.simulator.get_positions()
 
-    def close_order(self, ticket):
-        """Closes a specific order by ticket ID"""
-        return self.send_command({"action": "ORDER_CLOSE", "ticket": ticket})
+    def open_order(self, symbol: str, side: str, volume: float, sl: float = 0.0, tp: float = 0.0, comment: str = "RickSanchezBot") -> Dict[str, Any]:
+        """Submits a new market order."""
+        if self.active_mode == "MT5" and self.is_connected:
+            cmd = {
+                "action": "ORDER_OPEN",
+                "symbol": symbol,
+                "type": side.upper(),
+                "volume": float(volume),
+                "sl": float(sl),
+                "tp": float(tp),
+                "comment": comment
+            }
+            res = self.send_command(cmd)
+            if res:
+                return res
+        return self.simulator.open_order(symbol, side, volume, sl, tp, comment)
 
-    def get_open_positions(self):
-        """Retrieves list of all active open positions"""
-        res = self.send_command({"action": "GET_POSITIONS"})
-        if res:
-            return res.get("data", [])
-        return []
+    def modify_order(self, ticket: int, sl: float, tp: Optional[float] = None) -> Dict[str, Any]:
+        """Updates Stop Loss or Take Profit of an active trade."""
+        if self.active_mode == "MT5" and self.is_connected:
+            cmd = {"action": "ORDER_MODIFY", "ticket": ticket, "sl": float(sl)}
+            if tp is not None:
+                cmd["tp"] = float(tp)
+            res = self.send_command(cmd)
+            if res:
+                return res
+        return self.simulator.modify_order(ticket, sl, tp)
 
-if __name__ == "__main__":
-    print("=" * 65)
-    print("📈 METATRADER 5 DEMO ACCOUNT TESTER")
-    print("=" * 65)
-    
-    client = MT5Client()
-    print("Connecting to local MT5 Bridge...")
-    is_connected = client.connect()
-    
-    info = client.get_account_info()
-    print(f"\n👤 Account Summary:")
-    print(f"  • Status: {'🟢 LIVE MT5 BRIDGE' if is_connected else '🟡 SIMULATOR / STANDBY'}")
-    print(f"  • Balance: ${info.get('balance', 0):,.2f} {info.get('currency', 'USD')}")
-    print(f"  • Equity: ${info.get('equity', 0):,.2f}")
-    print(f"  • Leverage: 1:{info.get('leverage', 100)}")
+    def close_order(self, ticket: int, reason: str = "MANUAL") -> Dict[str, Any]:
+        """Closes a specific open position."""
+        if self.active_mode == "MT5" and self.is_connected:
+            res = self.send_command({"action": "ORDER_CLOSE", "ticket": ticket, "reason": reason})
+            if res:
+                return res
+        return self.simulator.close_order(ticket, reason=reason)
+
+    def close_all(self, reason: str = "PANIC_BUTTON") -> List[Dict[str, Any]]:
+        """Emergency command: Closes all active open positions."""
+        if self.active_mode == "MT5" and self.is_connected:
+            res = self.send_command({"action": "ORDER_CLOSE_ALL", "reason": reason})
+            if res and "data" in res:
+                return res["data"]
+        return self.simulator.close_all(reason=reason)
