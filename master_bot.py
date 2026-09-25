@@ -169,7 +169,7 @@ class TechnicalStrategy:
 
 class MasterExecutionEngine:
     def __init__(self):
-        self.report_path = "/Users/ricksabchez/Desktop/trading-bot/trading_report.json"
+        self.report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trading_report.json")
         self.risk = RiskEngine(Config.INITIAL_CAPITAL_USD)
         self.scanner = MarketScanner()
         self.open_positions = {}
