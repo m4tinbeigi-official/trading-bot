@@ -1,0 +1,9 @@
+{
+  "simulations": 5000,
+  "trades_analyzed": 1598,
+  "risk_of_ruin_pct": 32.06,
+  "median_max_dd_pct": 54.58,
+  "p95_max_dd_pct": 71.39,
+  "p99_max_dd_pct": 78.37,
+  "median_return_pct": 16.21
+}

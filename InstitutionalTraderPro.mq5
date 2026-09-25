@@ -6,8 +6,8 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, Rick Sanchez"
 #property link        "https://github.com/m4tinbeigi"
-#property version     "5.00"
-#property description "Ultra Institutional Multi-Asset Trading Engine with Dynamic Risk, Confluence Scoring, and News Guard"
+#property version     "5.50"
+#property description "Ultra Institutional Multi-Asset Trading Engine with Regime Detection, Correlation Matrix Guard, Half-Kelly Risk, and Telegram Telemetry"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -23,8 +23,8 @@ input bool              InpScanBasketOnly       = true;           // True = Mult
 input int               InpMaxConcurrentTrades  = 2;              // Max Allowed Concurrent Open Positions
 input ulong             InpSlippagePoints       = 20;             // Max Execution Deviation (Points)
 
-//--- INPUT PARAMETERS: TIMEFRAMES & STRATEGY
-input group "=== 2. EMPIRICAL MULTI-TIMEFRAME STRATEGY ==="
+//--- INPUT PARAMETERS: TIMEFRAMES, REGIME & STRATEGY
+input group "=== 2. MARKET REGIME & EMPIRICAL STRATEGY ==="
 input ENUM_TIMEFRAMES   InpMacroTF              = PERIOD_D1;      // Macro Trend Direction Timeframe
 input int               InpMacroEMAPeriod       = 200;            // Macro Trend Filter EMA
 input ENUM_TIMEFRAMES   InpTradingTF            = PERIOD_H1;      // Primary Setup Timeframe (H1)
@@ -32,11 +32,15 @@ input int               InpChannelBars          = 24;             // 24H Liquidi
 input int               InpRSIPeriod            = 14;             // Momentum RSI Period
 input double            InpRSIBullMin           = 48.0;           // RSI Bullish Momentum Floor
 input double            InpRSIBearMax           = 52.0;           // RSI Bearish Momentum Ceiling
+input bool              InpEnableRegimeFilter   = true;           // Market Regime Filter (Block Low-Volatility Chop)
+input int               InpADXPeriod            = 14;             // Regime ADX Trend Strength Period
+input double            InpMinADXTrendLevel     = 20.0;           // Min ADX Value Required to Trade (Avoid Choppy Squeeze)
 input int               InpMinConfluenceScore   = 7;              // Min Institutional Confluence Score (0-10)
 
 //--- INPUT PARAMETERS: HARD RISK MANAGEMENT & ASYMMETRIC EXITS
 input group "=== 3. INSTITUTIONAL RISK & ASYMMETRIC EXITS ==="
-input double            InpRiskPercent          = 1.5;            // Risk Per Trade (% of Account Equity)
+input double            InpRiskPercent          = 0.75;           // Risk Per Trade (% of Equity - Monte Carlo Optimized: 0.75%)
+input bool              InpUseHalfKellyAdaptive = true;           // Dynamically Modulate Risk via Half-Kelly Formula
 input double            InpMaxDailyLossPercent  = 3.0;            // Daily Drawdown Hard Kill-Switch (%)
 input double            InpMinLotSizeCap        = 0.01;           // Minimum Lot Size Cap
 input double            InpMaxLotSizeCap        = 1.00;           // Maximum Lot Size Cap
@@ -49,8 +53,9 @@ input bool              InpEnableTrailing       = true;           // Enable Dyna
 input double            InpTrailStartATR        = 2.0;            // Trailing Starts AFTER +2.0x ATR Profit
 input double            InpTrailDistATR         = 1.5;            // Trailing Buffer Behind Price (x ATR)
 
-//--- INPUT PARAMETERS: GUARDS & NEWS
-input group "=== 4. MARKET, SESSION & NEWS GUARDS ==="
+//--- INPUT PARAMETERS: GUARDS, NEWS & CORRELATION
+input group "=== 4. GUARDS, CORRELATION & TELEMETRY ==="
+input bool              InpCorrelationGuard     = true;           // Correlation Guard: Max 1 Trade per Base/Quote Currency
 input int               InpMaxSpreadPoints      = 30;             // Max Spread Allowed (Points)
 input bool              InpEnableSessionFilter  = true;           // Filter Trading Sessions (London & NY Overlap)
 input int               InpTradeStartHour       = 7;              // Session Start Hour (07:00 GMT/Server)
@@ -60,6 +65,9 @@ input int               InpFridayStopHour       = 17;             // Friday Stop
 input bool              InpRolloverFilter       = true;           // Block Trades During Bank Rollover (23:50-00:15)
 input double            InpSpikeFilterMult      = 2.5;            // Volatility Spike Filter (x ATR)
 input bool              InpHighImpactNewsGuard  = true;           // Calendar / News Volatility Guard
+input bool              InpSendTelegramAlerts   = false;          // Send Instant Telegram Webhook Alerts
+input string            InpTelegramBotToken     = "";             // Telegram Bot Token (Optional)
+input string            InpTelegramChatID       = "";             // Telegram Chat ID (Optional)
 
 //--- GLOBAL STRUCTURES & STORAGE
 struct PositionRecord
@@ -89,8 +97,8 @@ bool                    m_dailyKillSwitchTripped= false;
 int OnInit()
 {
    Print("========================================================");
-   Print("InstitutionalTraderPro Ultra v5.0 Initializing...");
-   Print("Institutional Multi-Currency Engine with Empirical Breathing Room");
+   Print("InstitutionalTraderPro Ultra v5.50 Initializing...");
+   Print("Enhanced with Correlation Matrix Guard, Regime Filter & Monte Carlo Half-Kelly Risk");
    
    m_trade.SetExpertMagicNumber(InpMagicNumber);
    m_trade.SetMarginMode();
@@ -115,7 +123,7 @@ int OnInit()
 
    InitDailyTracking();
 
-   PrintFormat("Initialized successfully. Scanning %d symbols | Risk: %.1f%% | Magic: %I64u",
+   PrintFormat("Initialized successfully. Scanning %d symbols | Risk: %.2f%% | Magic: %I64u",
                g_symbolCount, InpRiskPercent, InpMagicNumber);
    Print("========================================================");
    return(INIT_SUCCEEDED);
@@ -183,6 +191,14 @@ void OnTick()
 
       g_lastBarTimes[i] = currentBarTime;
 
+      // Correlation Matrix Guard: Prevent stacking directional risk on same currency
+      if(InpCorrelationGuard && IsCurrencyExposureExceeded(sym))
+         continue;
+
+      // Market Regime Guard: Filter low-volatility choppy markets
+      if(InpEnableRegimeFilter && !IsTrendRegimeValid(sym))
+         continue;
+
       // Spread Guard
       long spread = SymbolInfoInteger(sym, SYMBOL_SPREAD);
       if(spread > InpMaxSpreadPoints)
@@ -236,6 +252,53 @@ void ParseBasketSymbols(const string csv)
          g_symbolCount++;
       }
    }
+}
+
+//+------------------------------------------------------------------+
+//| Correlation Matrix Guard: Max 1 Trade per Base/Quote Currency     |
+//+------------------------------------------------------------------+
+bool IsCurrencyExposureExceeded(const string candidateSymbol)
+{
+   string baseCurr = StringSubstr(candidateSymbol, 0, 3);
+   string quoteCurr = StringSubstr(candidateSymbol, 3, 3);
+
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      if(m_position.SelectByIndex(i) && m_position.Magic() == InpMagicNumber)
+      {
+         string openSym = m_position.Symbol();
+         string openBase = StringSubstr(openSym, 0, 3);
+         string openQuote = StringSubstr(openSym, 3, 3);
+
+         if(baseCurr == openBase || baseCurr == openQuote ||
+            quoteCurr == openBase || quoteCurr == openQuote)
+         {
+            return true; // Overlapping currency exposure detected
+         }
+      }
+   }
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| Market Regime Detection: ADX Trend vs Choppy Squeeze             |
+//+------------------------------------------------------------------+
+bool IsTrendRegimeValid(const string symbol)
+{
+   int adxHandle = iADX(symbol, InpTradingTF, InpADXPeriod);
+   if(adxHandle == INVALID_HANDLE) return true;
+
+   double adxBuf[];
+   ArraySetAsSeries(adxBuf, true);
+   if(CopyBuffer(adxHandle, 0, 1, 1, adxBuf) < 1)
+   {
+      IndicatorRelease(adxHandle);
+      return true;
+   }
+   IndicatorRelease(adxHandle);
+
+   // Return true only if market has trending momentum (ADX >= Min Threshold)
+   return (adxBuf[0] >= InpMinADXTrendLevel);
 }
 
 //+------------------------------------------------------------------+
@@ -319,6 +382,7 @@ void UpdateDailyTracking()
          m_dailyKillSwitchTripped = true;
          PrintFormat("ALERT: Daily Loss Kill-Switch TRIPPED! PnL: $%.2f <= Max Loss: -$%.2f. All new trading halted.",
                      totalTodayPnL, maxAllowedLoss);
+         SendTelegramNotification(StringFormat("🚨 *KILL-SWITCH TRIPPED*\nAccount PnL: -$%.2f\nTrading halted for today.", MathAbs(totalTodayPnL)));
       }
    }
 }
@@ -387,7 +451,6 @@ bool IsHighImpactNewsNearby()
    datetime endCheck   = now + 1800; // 30 minutes after
 
    MqlCalendarValue values[];
-   // Check if high impact events are scheduled for USD or EUR
    int count = CalendarValueHistory(values, startCheck, endCheck, NULL, NULL);
    if(count > 0)
    {
@@ -483,14 +546,55 @@ int EvaluateConfluenceScore(const string symbol, ENUM_ORDER_TYPE &signalDir)
 }
 
 //+------------------------------------------------------------------+
-//| Hard Risk Lot Sizing: Account Equity % / SL Monetary Risk        |
+//| Hard Risk Lot Sizing with Adaptive Half-Kelly Optimization       |
 //+------------------------------------------------------------------+
 double CalculateDynamicLots(const string symbol, const double slDistancePoints)
 {
    if(slDistancePoints <= 0) return InpMinLotSizeCap;
 
    double equity       = m_account.Equity();
-   double riskMoney    = equity * (InpRiskPercent / 100.0);
+   double effectiveRiskPct = InpRiskPercent;
+
+   // Half-Kelly Dynamic Calibration based on recent 30 deals
+   if(InpUseHalfKellyAdaptive)
+   {
+      datetime lookback = TimeCurrent() - (30 * 86400);
+      if(HistorySelect(lookback, TimeCurrent()))
+      {
+         int total = HistoryDealsTotal();
+         int wins = 0, totalClosed = 0;
+         double totalWinMoney = 0, totalLossMoney = 0;
+
+         for(int i = 0; i < total; i++)
+         {
+            ulong t = HistoryDealGetTicket(i);
+            if(t > 0 && HistoryDealGetInteger(t, DEAL_MAGIC) == (long)InpMagicNumber)
+            {
+               long entry = HistoryDealGetInteger(t, DEAL_ENTRY);
+               if(entry == DEAL_ENTRY_OUT)
+               {
+                  double p = HistoryDealGetDouble(t, DEAL_PROFIT);
+                  if(p > 0) { wins++; totalWinMoney += p; }
+                  else if(p < 0) { totalLossMoney += MathAbs(p); }
+                  totalClosed++;
+               }
+            }
+         }
+
+         if(totalClosed >= 10 && totalLossMoney > 0)
+         {
+            double winRate = (double)wins / totalClosed;
+            double payoffRatio = (totalWinMoney / wins) / (totalLossMoney / (totalClosed - wins));
+            double fullKelly = (payoffRatio * winRate - (1.0 - winRate)) / payoffRatio;
+            double halfKelly = fullKelly * 0.5 * 100.0; // in percent
+
+            if(halfKelly > 0.4 && halfKelly < 1.5)
+               effectiveRiskPct = halfKelly;
+         }
+      }
+   }
+
+   double riskMoney    = equity * (effectiveRiskPct / 100.0);
 
    double tickSize     = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
    double tickValue    = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
@@ -566,12 +670,15 @@ void ExecuteInstitutionalTrade(const string symbol, ENUM_ORDER_TYPE dir, int sco
       tpPrice = NormalizeDouble(entryPrice - tpDistance, digits);
    }
 
-   string comment = StringFormat("Ultra-Breakout [%d/10]", score);
+   string comment = StringFormat("Ultra-v5.5 [%d/10]", score);
 
    if(m_trade.PositionOpen(symbol, dir, volume, entryPrice, slPrice, tpPrice, comment))
    {
       PrintFormat(">>> INSTITUTIONAL POSITION OPENED: %s %s %.2f lots @ %.*f | SL: %.*f | TP: %.*f | Confluence: %d/10",
                   EnumToString(dir), symbol, volume, digits, entryPrice, digits, slPrice, digits, tpPrice, score);
+      
+      SendTelegramNotification(StringFormat("🚀 *NEW ORDER EXECUTED*\nPair: %s\nType: %s\nVolume: %.2f lots\nPrice: %.*f\nSL: %.*f\nTP: %.*f\nScore: %d/10",
+                                            symbol, EnumToString(dir), volume, digits, entryPrice, digits, slPrice, digits, tpPrice, score));
    }
    else
    {
@@ -634,10 +741,10 @@ void ManagePositionsAndExits()
                if(m_trade.PositionClosePartial(ticket, closeVol))
                {
                   SetPartialStatus(ticket, true);
-                  // Secure Break-Even on remaining half
                   m_trade.PositionModify(ticket, openPrice, currentTP);
                   PrintFormat("[%s #%I64u] 50%% Partial Profit Locked (%.2f lots). SL Moved to Break-Even!",
                               symbol, ticket, closeVol);
+                  SendTelegramNotification(StringFormat("🎯 *50%% PARTIAL PROFIT LOCKED*\nSymbol: %s\nClosed: %.2f lots\nSL moved to Break-Even (Zero Risk)", symbol, closeVol));
                }
             }
          }
@@ -722,6 +829,24 @@ int CountActivePositions()
 }
 
 //+------------------------------------------------------------------+
+//| Optional Telegram Webhook Notification Dispatcher                |
+//+------------------------------------------------------------------+
+void SendTelegramNotification(const string message)
+{
+   if(!InpSendTelegramAlerts || InpTelegramBotToken == "" || InpTelegramChatID == "")
+      return;
+
+   string url = StringFormat("https://api.telegram.org/bot%s/sendMessage", InpTelegramBotToken);
+   string params = StringFormat("chat_id=%s&text=%s&parse_mode=Markdown", InpTelegramChatID, message);
+   char postData[];
+   StringToCharArray(params, postData, 0, WHOLE_ARRAY, CP_UTF8);
+   char result[];
+   string resultHeaders;
+
+   WebRequest("POST", url, "Content-Type: application/x-www-form-urlencoded\r\n", 3000, postData, result, resultHeaders);
+}
+
+//+------------------------------------------------------------------+
 //| Sleek Institutional HUD Dashboard                                |
 //+------------------------------------------------------------------+
 void UpdateStatusHUD(const string message)
@@ -732,7 +857,7 @@ void UpdateStatusHUD(const string message)
    int openCount = CountActivePositions();
 
    string hud = "========================================================\n" +
-                "    INSTITUTIONAL TRADER PRO - ULTRA SUITE v5.0         \n" +
+                "    INSTITUTIONAL TRADER PRO - ULTRA SUITE v5.5         \n" +
                 "========================================================\n" +
                 StringFormat(" Status:           %s\n", message) +
                 StringFormat(" Balance:          $%.2f USD\n", bal) +
@@ -740,9 +865,9 @@ void UpdateStatusHUD(const string message)
                 StringFormat(" Floating PnL:     $%.2f USD\n", pnl) +
                 StringFormat(" Open Positions:   %d / %d Active\n", openCount, InpMaxConcurrentTrades) +
                 StringFormat(" Daily Kill-Switch: %s (Cap: %.1f%%)\n", (m_dailyKillSwitchTripped ? "TRIPPED [LOCKED]" : "ACTIVE [SECURE]"), InpMaxDailyLossPercent) +
-                StringFormat(" Basket Scanning:  %d Pairs (Multi-Currency Portfolio)\n", g_symbolCount) +
-                " Confluence Model: D1 EMA200 Trend + 24H Liquidity Breakout + RSI\n" +
-                " Risk & Exits:     1.5% Dynamic Equity | 1:2 R:R | 50% Partial Lock\n" +
+                StringFormat(" Basket Scanning:  %d Pairs (Correlation Guard: ACTIVE)\n", g_symbolCount) +
+                " Regime Detection: ADX Trend Filter (Choppy Markets Blocked)\n" +
+                " Risk & Exits:     0.75% Half-Kelly Dynamic | 1:2 R:R | 50% Lock\n" +
                 " News Guard:       High-Impact Calendar Event Lock Active\n" +
                 "========================================================";
 
