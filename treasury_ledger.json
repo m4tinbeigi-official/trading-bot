@@ -1,0 +1,52 @@
+{
+  "created_at": "2026-09-25T06:30:12Z",
+  "total_gross_profit_usd": 127.5,
+  "total_reinvested_capital_usd": 108.38,
+  "total_opex_allocated_usd": 19.12,
+  "opex_balance_usd": 19.12,
+  "monthly_burn_rate_usd": 38.0,
+  "expenses": [
+    {
+      "category": "Cloud VPS Hosting",
+      "monthly_est": 10.0,
+      "status": "ACTIVE"
+    },
+    {
+      "category": "SOCKS5 Proxy & Relays",
+      "monthly_est": 8.0,
+      "status": "ACTIVE"
+    },
+    {
+      "category": "v1m / 9Router AI Quotas",
+      "monthly_est": 15.0,
+      "status": "ACTIVE"
+    },
+    {
+      "category": "Domains & SSL Maintenance",
+      "monthly_est": 5.0,
+      "status": "ACTIVE"
+    }
+  ],
+  "settlement_wallets": {
+    "USDT_TRC20": "TXYZAutonomousTradingTreasury999",
+    "TON": "EQAutonomousFundOperationsReserve001",
+    "SOL": "AutonomousFundTreasuryOpsSoL999"
+  },
+  "payout_history": [],
+  "transactions": [
+    {
+      "timestamp": "2026-09-25T06:30:12Z",
+      "trade_id": "TEST_DEAL_001",
+      "gross_profit": 85.0,
+      "opex_allocation": 12.75,
+      "reinvested": 72.25
+    },
+    {
+      "timestamp": "2026-09-25T06:30:31Z",
+      "trade_id": "FUND_1790317831760",
+      "gross_profit": 42.5,
+      "opex_allocation": 6.38,
+      "reinvested": 36.12
+    }
+  ]
+}
