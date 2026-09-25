@@ -28,12 +28,16 @@ from intermarket_dxy_veto import InterMarketDXYVetoEngine
 from order_flow_engine import OrderFlowEngine
 from regime_kalman_switcher import MarketRegimeSwitcher
 from momentum_decay_liquidator import MomentumDecayLiquidator
+from economic_calendar_news_filter import EconomicCalendarNewsFilter
+from tick_data_collector import TickDataCollector
+from telegram_visual_alerts import TelegramVisualAlerts
 
 class QuantitativeFundMaster:
     def __init__(self, initial_capital: float = 1000.0):
         print("=========================================================")
-        print("  QUANTITATIVE HEDGE FUND MASTER ENGINE (v7.0-QUANTUM)   ")
+        print("  QUANTITATIVE HEDGE FUND MASTER ENGINE (v8.0-MISSION)   ")
         print("  DXY Veto | Order Flow | Regime Switcher | SMC FVG     ")
+        print("  News Guard | Tick Data Store | Visual Telegram Alerts  ")
         print("  v1m System One | Stat-Arb | Autonomous OpEx Treasury   ")
         print("=========================================================")
 
@@ -43,6 +47,9 @@ class QuantitativeFundMaster:
         self.order_flow = OrderFlowEngine()
         self.regime_switcher = MarketRegimeSwitcher()
         self.liquidator = MomentumDecayLiquidator()
+        self.news_filter = EconomicCalendarNewsFilter(danger_window_pre_minutes=30, danger_window_post_minutes=30)
+        self.tick_collector = TickDataCollector()
+        self.alerts = TelegramVisualAlerts()
 
         self.triangular_scanner = TriangularArbitrageScanner(oracle=self.oracle)
         self.pairs_engine = PairsTradingCointegrationEngine(oracle=self.oracle)
