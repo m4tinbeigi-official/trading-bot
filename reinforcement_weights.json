@@ -5,5 +5,5 @@
   "dxy_veto_delta_threshold": 0.075,
   "risk_half_kelly_cap": 1.25,
   "learning_rate": 0.05,
-  "training_cycles_completed": 2
+  "training_cycles_completed": 3
 }

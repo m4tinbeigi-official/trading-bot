@@ -27,15 +27,15 @@ input ulong             InpSlippagePoints       = 20;             // Max Executi
 input group "=== 2. MARKET REGIME & EMPIRICAL STRATEGY ==="
 input ENUM_TIMEFRAMES   InpMacroTF              = PERIOD_D1;      // Macro Trend Direction Timeframe
 input int               InpMacroEMAPeriod       = 200;            // Macro Trend Filter EMA
-input ENUM_TIMEFRAMES   InpTradingTF            = PERIOD_H1;      // Primary Setup Timeframe (H1)
+input ENUM_TIMEFRAMES   InpTradingTF            = PERIOD_M5;      // Primary Setup Timeframe (M5)
 input int               InpChannelBars          = 24;             // 24H Liquidity Channel (Donchian Period)
 input int               InpRSIPeriod            = 14;             // Momentum RSI Period
 input double            InpRSIBullMin           = 48.0;           // RSI Bullish Momentum Floor
 input double            InpRSIBearMax           = 52.0;           // RSI Bearish Momentum Ceiling
-input bool              InpEnableRegimeFilter   = true;           // Market Regime Filter (Block Low-Volatility Chop)
+input bool              InpEnableRegimeFilter   = false;          // Market Regime Filter (Block Low-Volatility Chop)
 input int               InpADXPeriod            = 14;             // Regime ADX Trend Strength Period
 input double            InpMinADXTrendLevel     = 20.0;           // Min ADX Value Required to Trade (Avoid Choppy Squeeze)
-input int               InpMinConfluenceScore   = 9;              // Min Confluence Score (Out of 15) to Execute
+input int               InpMinConfluenceScore   = 4;              // Min Confluence Score (Out of 15) to Execute
 input bool              InpUseFVGFilter         = true;           // SMC: Fair Value Gap (FVG) / Imbalance Confluence
 input bool              InpUseVolumeSurge       = true;           // Institutional Tick Volume Surge Filter
 input double            InpVolumeSurgeMult      = 1.25;           // Volume Surge Multiplier (1.25x 20-bar avg)
@@ -185,6 +185,11 @@ void OnTick()
    }
 
    // 6. Multi-Asset Scanning & Confluence Execution
+   static datetime lastScanTime = 0;
+   if(TimeCurrent() - lastScanTime < 4)
+      return;
+   lastScanTime = TimeCurrent();
+
    string bestSymbol = "";
    ENUM_ORDER_TYPE bestDir = ORDER_TYPE_BUY;
    int bestScore = 0;
@@ -192,12 +197,6 @@ void OnTick()
    for(int i = 0; i < g_symbolCount; i++)
    {
       string sym = g_symbols[i];
-
-      datetime currentBarTime = iTime(sym, InpTradingTF, 0);
-      if(currentBarTime == 0 || currentBarTime == g_lastBarTimes[i])
-         continue; // Only process on new bar open
-
-      g_lastBarTimes[i] = currentBarTime;
 
       // Correlation Matrix Guard: Prevent stacking directional risk on same currency
       if(InpCorrelationGuard && IsCurrencyExposureExceeded(sym))
