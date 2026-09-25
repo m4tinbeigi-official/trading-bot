@@ -19,16 +19,18 @@ from v1m_oracle import V1mDecisionOracle
 from stat_arbitrage_engine import TriangularArbitrageScanner, PairsTradingCointegrationEngine
 from compounding_engine import ExponentialCompoundingEngine
 from treasury_manager import AutonomousTreasuryManager
+from smc_liquidity_engine import SMCLiquidityEngine
 
 class QuantitativeFundMaster:
     def __init__(self, initial_capital: float = 1000.0):
         print("=========================================================")
-        print("  QUANTITATIVE HEDGE FUND MASTER ENGINE (v6.0-ALPHA)    ")
-        print("  Powered by v1m System One AI | Statistical Arbitrage   ")
+        print("  QUANTITATIVE HEDGE FUND MASTER ENGINE (v6.2-PRO)       ")
+        print("  SMC Imbalance | v1m System One | Statistical Arbitrage ")
         print("  Autonomous Treasury & Exponential Compounding          ")
         print("=========================================================")
 
         self.oracle = V1mDecisionOracle()
+        self.smc = SMCLiquidityEngine(volume_surge_mult=1.25)
         self.triangular_scanner = TriangularArbitrageScanner(oracle=self.oracle)
         self.pairs_engine = PairsTradingCointegrationEngine(oracle=self.oracle)
         self.compounding = ExponentialCompoundingEngine(initial_capital=initial_capital)

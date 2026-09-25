@@ -35,7 +35,10 @@ input double            InpRSIBearMax           = 52.0;           // RSI Bearish
 input bool              InpEnableRegimeFilter   = true;           // Market Regime Filter (Block Low-Volatility Chop)
 input int               InpADXPeriod            = 14;             // Regime ADX Trend Strength Period
 input double            InpMinADXTrendLevel     = 20.0;           // Min ADX Value Required to Trade (Avoid Choppy Squeeze)
-input int               InpMinConfluenceScore   = 7;              // Min Institutional Confluence Score (0-10)
+input int               InpMinConfluenceScore   = 9;              // Min Confluence Score (Out of 15) to Execute
+input bool              InpUseFVGFilter         = true;           // SMC: Fair Value Gap (FVG) / Imbalance Confluence
+input bool              InpUseVolumeSurge       = true;           // Institutional Tick Volume Surge Filter
+input double            InpVolumeSurgeMult      = 1.25;           // Volume Surge Multiplier (1.25x 20-bar avg)
 
 //--- INPUT PARAMETERS: HARD RISK MANAGEMENT & ASYMMETRIC EXITS
 input group "=== 3. INSTITUTIONAL RISK & ASYMMETRIC EXITS ==="
@@ -561,6 +564,35 @@ int EvaluateConfluenceScore(const string symbol, ENUM_ORDER_TYPE &signalDir)
       IndicatorRelease(rsiHandle);
    }
 
+   // 4. Smart Money Concepts: Fair Value Gap (FVG) / Imbalance -> 3 Points
+   if(InpUseFVGFilter && CopyRates(symbol, InpTradingTF, 0, 5, tfRates) >= 4)
+   {
+      // Bullish FVG: Bar 1 Low > Bar 3 High (Clean displacement gap)
+      bool bullFVG = (tfRates[1].low > tfRates[3].high);
+      // Bearish FVG: Bar 1 High < Bar 3 Low
+      bool bearFVG = (tfRates[1].high < tfRates[3].low);
+
+      if(bullFVG) buyScore += 3;
+      if(bearFVG) sellScore += 3;
+   }
+
+   // 5. Institutional Tick Volume Surge -> 2 Points
+   if(InpUseVolumeSurge && CopyRates(symbol, InpTradingTF, 0, 22, tfRates) >= 22)
+   {
+      long totalVol = 0;
+      for(int v = 2; v <= 21; v++)
+         totalVol += tfRates[v].tick_volume;
+      double avgVol = (double)totalVol / 20.0;
+
+      if(avgVol > 0 && tfRates[1].tick_volume >= InpVolumeSurgeMult * avgVol)
+      {
+         if(tfRates[1].close > tfRates[1].open)
+            buyScore += 2;
+         else if(tfRates[1].close < tfRates[1].open)
+            sellScore += 2;
+      }
+   }
+
    if(buyScore >= InpMinConfluenceScore && buyScore > sellScore)
    {
       signalDir = ORDER_TYPE_BUY;
@@ -786,6 +818,17 @@ void ManagePositionsAndExits()
          if(t == POSITION_TYPE_BUY)
          {
             double profit = currentPrice - openPrice;
+            // Level 2 Profit Lock: At +2.5x ATR, lock in +1.0x ATR in bank
+            if(profit >= 2.5 * atrVal)
+            {
+               double lockSL = NormalizeDouble(openPrice + (1.0 * atrVal), digits);
+               if(lockSL > currentSL + (5 * point))
+               {
+                  m_trade.PositionModify(ticket, lockSL, currentTP);
+                  PrintFormat("[%s #%I64u] Level 2 Profit Lock: SL stepped to +1.0x ATR profit", symbol, ticket);
+               }
+            }
+            // Level 3 Trailing: At +3.0x ATR, smooth trail behind price
             if(profit >= trailTriggerDist)
             {
                double newSL = NormalizeDouble(currentPrice - trailDistance, digits);
@@ -800,6 +843,17 @@ void ManagePositionsAndExits()
          else if(t == POSITION_TYPE_SELL)
          {
             double profit = openPrice - currentPrice;
+            // Level 2 Profit Lock: At +2.5x ATR, lock in +1.0x ATR in bank
+            if(profit >= 2.5 * atrVal)
+            {
+               double lockSL = NormalizeDouble(openPrice - (1.0 * atrVal), digits);
+               if(currentSL == 0.0 || lockSL < currentSL - (5 * point))
+               {
+                  m_trade.PositionModify(ticket, lockSL, currentTP);
+                  PrintFormat("[%s #%I64u] Level 2 Profit Lock: SL stepped to +1.0x ATR profit", symbol, ticket);
+               }
+            }
+            // Level 3 Trailing: At +3.0x ATR, smooth trail behind price
             if(profit >= trailTriggerDist)
             {
                double newSL = NormalizeDouble(currentPrice + trailDistance, digits);
