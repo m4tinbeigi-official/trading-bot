@@ -1,0 +1,9 @@
+{
+  "min_confluence_score": 8.0,
+  "fvg_threshold_pips": 4.5,
+  "volume_surge_mult": 1.275,
+  "dxy_veto_delta_threshold": 0.075,
+  "risk_half_kelly_cap": 1.25,
+  "learning_rate": 0.05,
+  "training_cycles_completed": 2
+}
