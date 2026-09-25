@@ -6,7 +6,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, Rick Sanchez"
 #property link        "https://github.com/m4tinbeigi"
-#property version     "5.50"
+#property version     "7.00"
 #property description "Ultra Institutional Multi-Asset Trading Engine with Regime Detection, Correlation Matrix Guard, Half-Kelly Risk, and Telegram Telemetry"
 #property strict
 
@@ -39,6 +39,9 @@ input int               InpMinConfluenceScore   = 9;              // Min Conflue
 input bool              InpUseFVGFilter         = true;           // SMC: Fair Value Gap (FVG) / Imbalance Confluence
 input bool              InpUseVolumeSurge       = true;           // Institutional Tick Volume Surge Filter
 input double            InpVolumeSurgeMult      = 1.25;           // Volume Surge Multiplier (1.25x 20-bar avg)
+input bool              InpUseDXYVeto           = true;           // Inter-Market DXY Dollar Index Veto Engine
+input bool              InpUseDynamicLiquidate  = true;           // Dynamic Momentum Decay Liquidation
+input bool              InpUseTickImbalance     = true;           // Order Flow & Tick Delta Imbalance Guard
 
 //--- INPUT PARAMETERS: HARD RISK MANAGEMENT & ASYMMETRIC EXITS
 input group "=== 3. INSTITUTIONAL RISK & ASYMMETRIC EXITS ==="
@@ -217,9 +220,12 @@ void OnTick()
 
       if(score >= InpMinConfluenceScore && score > bestScore)
       {
-         bestScore = score;
-         bestSymbol = sym;
-         bestDir = sigDir;
+         if(!IsTradeVetoedByDXY(sym, sigDir))
+         {
+            bestScore = score;
+            bestSymbol = sym;
+            bestDir = sigDir;
+         }
       }
    }
 
@@ -505,6 +511,93 @@ bool IsHighImpactNewsNearby()
 //+------------------------------------------------------------------+
 //| Empirical Confluence Scoring Engine (0 to 10 Points)             |
 //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| Calculate Real-Time Geometric Synthetic US Dollar Index (DXY)    |
+//+------------------------------------------------------------------+
+double CalculateSyntheticDXY(int shift = 0)
+{
+   string symEUR = ResolveBrokerSymbol("EURUSD");
+   string symJPY = ResolveBrokerSymbol("USDJPY");
+   string symGBP = ResolveBrokerSymbol("GBPUSD");
+   string symCAD = ResolveBrokerSymbol("USDCAD");
+   string symCHF = ResolveBrokerSymbol("USDCHF");
+
+   MqlRates rEUR[], rJPY[], rGBP[], rCAD[], rCHF[];
+   if(CopyRates(symEUR, InpTradingTF, shift, 1, rEUR) <= 0 ||
+      CopyRates(symJPY, InpTradingTF, shift, 1, rJPY) <= 0 ||
+      CopyRates(symGBP, InpTradingTF, shift, 1, rGBP) <= 0 ||
+      CopyRates(symCAD, InpTradingTF, shift, 1, rCAD) <= 0 ||
+      CopyRates(symCHF, InpTradingTF, shift, 1, rCHF) <= 0)
+   {
+      return 104.0;
+   }
+
+   double eurusd = rEUR[0].close;
+   double usdjpy = rJPY[0].close;
+   double gbpusd = rGBP[0].close;
+   double usdcad = rCAD[0].close;
+   double usdchf = rCHF[0].close;
+
+   if(eurusd <= 0 || usdjpy <= 0 || gbpusd <= 0 || usdcad <= 0 || usdchf <= 0)
+      return 104.0;
+
+   // 50.14348112 * (EURUSD)^(-0.576) * (USDJPY)^(0.136) * (GBPUSD)^(-0.119) * (USDCAD)^(0.091) * (USDCHF)^(0.036)
+   double dxy = 50.14348112 *
+                MathPow(eurusd, -0.576) *
+                MathPow(usdjpy, 0.136) *
+                MathPow(gbpusd, -0.119) *
+                MathPow(usdcad, 0.091) *
+                MathPow(usdchf, 0.036);
+
+   return dxy;
+}
+
+//+------------------------------------------------------------------+
+//| Check if Trade is VETOED by Macro DXY Momentum Spillover         |
+//+------------------------------------------------------------------+
+bool IsTradeVetoedByDXY(const string symbol, ENUM_ORDER_TYPE orderType)
+{
+   if(!InpUseDXYVeto) return false;
+
+   double currDXY = CalculateSyntheticDXY(0);
+   double prevDXY = CalculateSyntheticDXY(2);
+   double deltaDXY = currDXY - prevDXY;
+
+   string baseCurr = StringSubstr(symbol, 0, 3);
+   string quoteCurr = StringSubstr(symbol, 3, 3);
+
+   // Inverse pairs (EURUSD, GBPUSD, AUDUSD, XAUUSD)
+   if(quoteCurr == "USD")
+   {
+      if(orderType == ORDER_TYPE_BUY && deltaDXY > 0.08)
+      {
+         PrintFormat("[%s] VETOED by DXY Surge: DXY +%.2f (Macro Dollar Strength Blocks Long)", symbol, deltaDXY);
+         return true;
+      }
+      if(orderType == ORDER_TYPE_SELL && deltaDXY < -0.08)
+      {
+         PrintFormat("[%s] VETOED by DXY Dump: DXY %.2f (Macro Dollar Weakness Blocks Short)", symbol, deltaDXY);
+         return true;
+      }
+   }
+   // Base USD pairs (USDJPY, USDCAD, USDCHF)
+   else if(baseCurr == "USD")
+   {
+      if(orderType == ORDER_TYPE_BUY && deltaDXY < -0.08)
+      {
+         PrintFormat("[%s] VETOED by DXY Dump: DXY %.2f (Macro Dollar Weakness Blocks USD Long)", symbol, deltaDXY);
+         return true;
+      }
+      if(orderType == ORDER_TYPE_SELL && deltaDXY > 0.08)
+      {
+         PrintFormat("[%s] VETOED by DXY Surge: DXY +%.2f (Macro Dollar Strength Blocks USD Short)", symbol, deltaDXY);
+         return true;
+      }
+   }
+
+   return false;
+}
+
 int EvaluateConfluenceScore(const string symbol, ENUM_ORDER_TYPE &signalDir)
 {
    int buyScore  = 0;
@@ -862,6 +955,32 @@ void ManagePositionsAndExits()
                   m_trade.PositionModify(ticket, newSL, currentTP);
                   PrintFormat("[%s #%I64u] Trailing Stop Advanced to %.*f (Profit: +%.1f pips)",
                               symbol, ticket, digits, newSL, profit / (10 * point));
+               }
+            }
+         }
+      }
+
+      // --- 3. DYNAMIC MOMENTUM DECAY LIQUIDATION ---
+      if(InpUseDynamicLiquidate)
+      {
+         double profit = (t == POSITION_TYPE_BUY) ? (currentPrice - openPrice) : (openPrice - currentPrice);
+         if(profit >= 1.0 * atrVal)
+         {
+            MqlRates lastRates[];
+            if(CopyRates(symbol, InpTradingTF, 0, 2, lastRates) >= 2)
+            {
+               bool isExhausted = false;
+               if(t == POSITION_TYPE_BUY && lastRates[1].close < lastRates[1].open && (lastRates[1].open - lastRates[1].close) >= 0.8 * atrVal)
+                  isExhausted = true;
+               else if(t == POSITION_TYPE_SELL && lastRates[1].close > lastRates[1].open && (lastRates[1].close - lastRates[1].open) >= 0.8 * atrVal)
+                  isExhausted = true;
+
+               if(isExhausted)
+               {
+                  m_trade.PositionClose(ticket);
+                  PrintFormat("[%s #%I64u] Dynamic Momentum Decay: Position Liquidated at Peak (+%.1f pips)",
+                              symbol, ticket, profit / (10 * point));
+                  continue;
                }
             }
          }

@@ -1,9 +1,9 @@
 {
   "created_at": "2026-09-25T06:30:12Z",
-  "total_gross_profit_usd": 170.0,
-  "total_reinvested_capital_usd": 144.5,
-  "total_opex_allocated_usd": 25.5,
-  "opex_balance_usd": 25.5,
+  "total_gross_profit_usd": 228.2,
+  "total_reinvested_capital_usd": 193.97,
+  "total_opex_allocated_usd": 34.23,
+  "opex_balance_usd": 34.23,
   "monthly_burn_rate_usd": 38.0,
   "expenses": [
     {
@@ -54,6 +54,13 @@
       "gross_profit": 42.5,
       "opex_allocation": 6.38,
       "reinvested": 36.12
+    },
+    {
+      "timestamp": "2026-09-25T07:04:12Z",
+      "trade_id": "FUND_1790319852273",
+      "gross_profit": 58.2,
+      "opex_allocation": 8.73,
+      "reinvested": 49.47
     }
   ]
 }
