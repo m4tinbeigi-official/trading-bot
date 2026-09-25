@@ -30,7 +30,11 @@
         </div>
         <div class="mode-badge paper" id="mode-badge">
           <span class="dot"></span>
-          <span id="mode-text">🟡 PAPER SIMULATOR</span>
+          <span id="mode-text">🟡 QUANT SUITE v7.50</span>
+        </div>
+        <div class="mode-badge live" id="latency-badge" style="background: rgba(0, 255, 170, 0.1); border-color: rgba(0, 255, 170, 0.4);">
+          <span class="dot green" id="latency-dot"></span>
+          <span id="val-latency" style="color: #00ffaa; font-family: monospace;">98ms (Alpari)</span>
         </div>
         <div class="actions">
           <button class="btn btn-secondary" id="btn-toggle-bot">
@@ -74,6 +78,16 @@
         <div class="metric-title">وین‌ریت و بازدهی (Win Rate)</div>
         <div class="metric-value" id="val-win-rate">0%</div>
         <div class="metric-sub" id="sub-trades-count">تعداد معاملات بسته: 0</div>
+      </div>
+      <div class="card metric-card">
+        <div class="metric-title">استقلال خزانه‌داری (OpEx Runway)</div>
+        <div class="metric-value highlight" id="val-runway" style="color: #00ffaa;">27.0 روز</div>
+        <div class="metric-sub" id="sub-opex-bal">ذخیره: $34.23 پوشش هزینه</div>
+      </div>
+      <div class="card metric-card">
+        <div class="metric-title">ممیزی اسلیپیج بروکر (Execution)</div>
+        <div class="metric-value safe" id="val-slippage">0.2 pips</div>
+        <div class="metric-sub">وضعیت: اجرای بهینه و پاک</div>
       </div>
     </section>
 

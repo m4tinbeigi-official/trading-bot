@@ -1,0 +1,14 @@
+[
+  {
+    "timestamp": "2026-09-25 07:14:09",
+    "symbol": "EURUSD",
+    "order_type": "BUY",
+    "volume_lot": 0.1,
+    "requested_price": 1.085,
+    "filled_price": 1.08502,
+    "slippage_pips": 0.2,
+    "slippage_type": "NEGATIVE (BAD)",
+    "execution_ms": 88.5,
+    "flagged_harmful": false
+  }
+]

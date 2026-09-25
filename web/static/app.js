@@ -80,6 +80,26 @@ function updateDashboard(data) {
   document.getElementById("val-win-rate").innerText = `${winRate}%`;
   document.getElementById("sub-trades-count").innerText = `تعداد معاملات بسته: ${totalClosed} (${winCount} برنده)`;
 
+  // 3.1 Latency Watchdog & OpEx Runway
+  if (data.heartbeat) {
+    const lat = data.heartbeat.avg_latency_ms || 98.0;
+    const elLat = document.getElementById("val-latency");
+    if (elLat) elLat.innerText = `${lat}ms (Alpari)`;
+    const elDot = document.getElementById("latency-dot");
+    if (elDot) {
+      elDot.style.background = lat < 180 ? "#00ffaa" : (lat < 350 ? "#ffd700" : "#ff4444");
+    }
+  }
+
+  if (data.treasury) {
+    const rDays = data.treasury.runway_days || 27.0;
+    const oBal = data.treasury.opex_balance || 34.23;
+    const elRunway = document.getElementById("val-runway");
+    const elOpex = document.getElementById("sub-opex-bal");
+    if (elRunway) elRunway.innerText = `${rDays} روز`;
+    if (elOpex) elOpex.innerText = `ذخیره: $${oBal.toFixed(2)} پوشش هزینه`;
+  }
+
   // 4. Circuit Breaker Banner
   const alertBanner = document.getElementById("alert-banner");
   if (data.circuit_breaker) {

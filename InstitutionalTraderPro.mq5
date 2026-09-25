@@ -6,7 +6,7 @@
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, Rick Sanchez"
 #property link        "https://github.com/m4tinbeigi"
-#property version     "7.00"
+#property version     "7.50"
 #property description "Ultra Institutional Multi-Asset Trading Engine with Regime Detection, Correlation Matrix Guard, Half-Kelly Risk, and Telegram Telemetry"
 #property strict
 
@@ -42,6 +42,8 @@ input double            InpVolumeSurgeMult      = 1.25;           // Volume Surg
 input bool              InpUseDXYVeto           = true;           // Inter-Market DXY Dollar Index Veto Engine
 input bool              InpUseDynamicLiquidate  = true;           // Dynamic Momentum Decay Liquidation
 input bool              InpUseTickImbalance     = true;           // Order Flow & Tick Delta Imbalance Guard
+input bool              InpEnableSlippageAudit  = true;           // Broker Execution & Slippage Auditor
+input double            InpMaxSlippagePips      = 1.5;            // Max Tolerated Negative Slippage (Pips)
 
 //--- INPUT PARAMETERS: HARD RISK MANAGEMENT & ASYMMETRIC EXITS
 input group "=== 3. INSTITUTIONAL RISK & ASYMMETRIC EXITS ==="
@@ -1077,3 +1079,49 @@ void UpdateStatusHUD(const string message)
    Comment(hud);
 }
 //+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//| Trade transaction handler: Audits Broker Execution & Slippage    |
+//+------------------------------------------------------------------+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+{
+   if(!InpEnableSlippageAudit) return;
+
+   if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
+   {
+      ulong dealTicket = trans.deal;
+      if(dealTicket > 0 && HistoryDealSelect(dealTicket))
+      {
+         long dealType = HistoryDealGetInteger(dealTicket, DEAL_TYPE);
+         long dealEntry = HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
+         if(dealEntry == DEAL_ENTRY_IN)
+         {
+            string dealSymbol = HistoryDealGetString(dealTicket, DEAL_SYMBOL);
+            double dealPrice = HistoryDealGetDouble(dealTicket, DEAL_PRICE);
+            double orderPrice = trans.price;
+
+            int digits = (int)SymbolInfoInteger(dealSymbol, SYMBOL_DIGITS);
+            double pointMult = (StringFind(dealSymbol, "JPY") >= 0) ? 100.0 : 10000.0;
+
+            double slippagePips = 0.0;
+            if(dealType == DEAL_TYPE_BUY)
+               slippagePips = (dealPrice - orderPrice) * pointMult;
+            else if(dealType == DEAL_TYPE_SELL)
+               slippagePips = (orderPrice - dealPrice) * pointMult;
+
+            if(slippagePips > InpMaxSlippagePips)
+            {
+               PrintFormat("🚨 [BROKER AUDIT WARNING] %s #%I64u Negative Slippage: +%.2f pips (Req: %.*f, Fill: %.*f)",
+                           dealSymbol, dealTicket, slippagePips, digits, orderPrice, digits, dealPrice);
+            }
+            else
+            {
+               PrintFormat("🛡️ [BROKER AUDIT] %s #%I64u Clean Execution: Slippage %.2f pips",
+                           dealSymbol, dealTicket, slippagePips);
+            }
+         }
+      }
+   }
+}
