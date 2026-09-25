@@ -3,23 +3,24 @@ Centralized Configuration for Rick Sanchez MT5 Trading Bot
 Defines asset symbols, prop-firm risk parameters, trading sessions, and connection settings.
 """
 
+import os
 from dataclasses import dataclass, field
 from typing import List
 
 @dataclass
 class TradingConfig:
     # Mode Settings: 'PAPER' (Local Simulation) or 'MT5' (MetaTrader 5 Bridge) or 'AUTO' (Auto-detect MT5, fallback to Paper)
-    EXECUTION_MODE: str = "AUTO"
+    EXECUTION_MODE: str = os.getenv("TRADING_EXECUTION_MODE", "AUTO")
     
     # Target Trading Symbols
     SYMBOLS: List[str] = field(default_factory=lambda: ["XAUUSD", "EURUSD", "GBPUSD", "NAS100"])
     
     # Account & Capital
-    INITIAL_BALANCE: float = 100.0  # USD (Demo balance)
+    INITIAL_BALANCE: float = float(os.getenv("TRADING_INITIAL_BALANCE", 100.0))  # USD (Demo balance)
     ACCOUNT_CURRENCY: str = "USD"
-    DEFAULT_LEVERAGE: int = 100
-    MT5_LOGIN: int = 113150386
-    MT5_SERVER: str = "MetaQuotes-Demo"
+    DEFAULT_LEVERAGE: int = int(os.getenv("TRADING_DEFAULT_LEVERAGE", 100))
+    MT5_LOGIN: int = int(os.getenv("MT5_LOGIN", 113150386))
+    MT5_SERVER: str = os.getenv("MT5_SERVER", "MetaQuotes-Demo")
     
     # Prop-Firm & Risk Management Rules
     RISK_PER_TRADE_PCT: float = 1.0       # Risk 1.0% of current equity per trade
@@ -58,8 +59,9 @@ class TradingConfig:
     MT5_SUB_PORT: int = 5556
     MT5_TIMEOUT_MS: int = 3000
     
-    # Web Dashboard Settings
-    WEB_HOST: str = "0.0.0.0"
-    WEB_PORT: int = 8080
+    # Web Dashboard Settings (Default 127.0.0.1 for local secure isolation)
+    WEB_HOST: str = os.getenv("TRADING_WEB_HOST", "127.0.0.1")
+    WEB_PORT: int = int(os.getenv("TRADING_WEB_PORT", 8080))
+    CONTROL_TOKEN: str = os.getenv("TRADING_CONTROL_TOKEN", "") # Secret token for panic/control API endpoints
 
 config = TradingConfig()

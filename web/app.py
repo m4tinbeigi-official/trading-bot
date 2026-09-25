@@ -9,10 +9,11 @@ import sys
 import json
 import asyncio
 import logging
-from typing import Dict, Any, List
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from typing import Dict, Any, List, Optional
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 # Ensure root trading-bot dir is on path
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -27,6 +28,27 @@ from config import config
 logger = logging.getLogger("MissionControl")
 
 app = FastAPI(title="Mission Control Quant Suite (v7.50)")
+
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+def verify_control_auth(request: Request):
+    """Enforces authentication token if TRADING_CONTROL_TOKEN is set in environment."""
+    required_token = config.CONTROL_TOKEN
+    if required_token:
+        auth_header = request.headers.get("Authorization", "")
+        token = request.headers.get("X-Control-Token")
+        if not token and auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+        if token != required_token:
+            raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing control token.")
 
 watchdog = HeartbeatWatchdog(check_interval_s=15)
 watchdog.start_background_monitoring()
@@ -84,7 +106,7 @@ async def get_mission_control():
         "closed_trades": history[-15:]
     }
 
-@app.post("/api/panic")
+@app.post("/api/panic", dependencies=[Depends(verify_control_auth)])
 async def panic_close_all():
     """Emergency Panic Button: Immediately liquidates all open positions and pauses bot."""
     bridge = bot_context.get("bridge")
@@ -96,13 +118,13 @@ async def panic_close_all():
     logger.warning("🚨 PANIC BUTTON ACTIVATED: Liquidated all positions and paused trading.")
     return {"status": "SUCCESS", "message": "All positions closed. Trading locked.", "closed_positions": len(closed)}
 
-@app.post("/api/resume")
+@app.post("/api/resume", dependencies=[Depends(verify_control_auth)])
 async def resume_bot():
     bot_context["bot_running"] = True
     bot_context["panic_triggered"] = False
     return {"status": "SUCCESS", "message": "System re-armed and operational."}
 
-@app.post("/api/toggle")
+@app.post("/api/toggle", dependencies=[Depends(verify_control_auth)])
 async def toggle_bot():
     bot_context["bot_running"] = not bot_context.get("bot_running", True)
     state = "RESUMED" if bot_context["bot_running"] else "PAUSED"

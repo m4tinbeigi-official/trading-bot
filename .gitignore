@@ -4,5 +4,11 @@ __pycache__/
 .DS_Store
 mt5_account.json
 *.secret
+*.token
+*.env
 .env
+.env.*
+*.db
+*.sqlite
+*.log
 .hermes/
