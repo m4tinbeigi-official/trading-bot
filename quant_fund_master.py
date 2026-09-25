@@ -31,13 +31,16 @@ from momentum_decay_liquidator import MomentumDecayLiquidator
 from economic_calendar_news_filter import EconomicCalendarNewsFilter
 from tick_data_collector import TickDataCollector
 from telegram_visual_alerts import TelegramVisualAlerts
+from live_monte_carlo_var import LiveMonteCarloStressTester
+from session_liquidity_auditor import SessionLiquidityAuditor
+from hmm_regime_classifier import GaussianHMMRegimeClassifier
 
 class QuantitativeFundMaster:
     def __init__(self, initial_capital: float = 1000.0):
         print("=========================================================")
-        print("  QUANTITATIVE HEDGE FUND MASTER ENGINE (v8.0-MISSION)   ")
+        print("  QUANTITATIVE HEDGE FUND MASTER ENGINE (v8.5-ULTRA)     ")
         print("  DXY Veto | Order Flow | Regime Switcher | SMC FVG     ")
-        print("  News Guard | Tick Data Store | Visual Telegram Alerts  ")
+        print("  News Guard | Tick Store | Monte Carlo VaR | HMM State  ")
         print("  v1m System One | Stat-Arb | Autonomous OpEx Treasury   ")
         print("=========================================================")
 
@@ -50,6 +53,9 @@ class QuantitativeFundMaster:
         self.news_filter = EconomicCalendarNewsFilter(danger_window_pre_minutes=30, danger_window_post_minutes=30)
         self.tick_collector = TickDataCollector()
         self.alerts = TelegramVisualAlerts()
+        self.stress_tester = LiveMonteCarloStressTester(num_simulations=1000, horizon_days=30)
+        self.session_auditor = SessionLiquidityAuditor()
+        self.hmm_classifier = GaussianHMMRegimeClassifier()
 
         self.triangular_scanner = TriangularArbitrageScanner(oracle=self.oracle)
         self.pairs_engine = PairsTradingCointegrationEngine(oracle=self.oracle)

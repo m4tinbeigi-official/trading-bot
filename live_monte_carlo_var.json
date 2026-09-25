@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-09-25 07:36:23",
+  "initial_equity": 1000.0,
+  "simulations": 2000,
+  "horizon_days": 30,
+  "median_projected_equity": 1490.79,
+  "projected_profit_pct": 49.08,
+  "var_95_usd": 0.0,
+  "var_99_usd": 0.0,
+  "cvar_99_usd": 0.0,
+  "drawdown_95_pct": 6.57,
+  "worst_case_drawdown_pct": 12.07,
+  "capital_preservation_passed": true
+}
