@@ -1,26 +1,7 @@
 {
-  "timestamp": "2026-09-25T21:43:15.120869+00:00",
-  "total_equity_usd": 10067.4,
-  "open_positions": {
-    "XAUUSD": {
-      "symbol": "XAUUSD",
-      "side": "BUY",
-      "entry": 4351.5,
-      "size": 1516.3964999999998,
-      "sl": 4264.47,
-      "tp": 4503.8025,
-      "opened_at": "2026-09-22T07:56:34.241006+00:00"
-    },
-    "BTCUSDT": {
-      "symbol": "BTCUSDT",
-      "side": "BUY",
-      "entry": 83208.0,
-      "size": 1516.3964999999998,
-      "sl": 81543.84,
-      "tp": 86120.28,
-      "opened_at": "2026-09-24T09:35:54.055642+00:00"
-    }
-  },
+  "timestamp": "2026-09-29T04:46:19.872484+00:00",
+  "total_equity_usd": 10032.24,
+  "open_positions": {},
   "trade_history": [
     {
       "symbol": "BTCUSDT",
@@ -57,6 +38,24 @@
       "pnl_usd": -41.91,
       "pnl_pct": -2.76,
       "closed_at": "2026-09-24T09:35:54.863967+00:00"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "side": "BUY",
+      "entry": 83208.0,
+      "exit": 84994.0,
+      "pnl_usd": 32.55,
+      "pnl_pct": 2.15,
+      "closed_at": "2026-09-27T12:41:14.254283+00:00"
+    },
+    {
+      "symbol": "XAUUSD",
+      "side": "BUY",
+      "entry": 4351.5,
+      "exit": 4157.2001953125,
+      "pnl_usd": -67.71,
+      "pnl_pct": -4.47,
+      "closed_at": "2026-09-29T04:46:10.863148+00:00"
     }
   ],
   "risk_status": {
