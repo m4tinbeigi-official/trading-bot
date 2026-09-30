@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://devsponsors.github.io">
+    <img src="https://devsponsors.github.io/assets/badges/sponsor.svg" alt="DevSponsors Badge">
+  </a>
+</p>
+
 # ⚡ Institutional Trading Bot & Quantitative Fund Engine (MT5 / MQL5 / Python)
 
 سیستم جامع و پروداکشن معاملات الگوریتمی و کمی برای **MetaTrader 5** به همراه ماژول‌های پایتون جهت شبیه‌سازی، پایش ریسک، اجرای سفارش، ماتریس همبستگی، تشخیص رژیم بازار، مدیریت ریسک هاف-کلی، آربیتراژ آماری دلتا-خنثی، موتور رشد تصاعدی سرمایه، اتصال به هوش شناختی **v1m System One**، فیلتر وتوی شاخص دلار (DXY)، فلو سفارشات (Order Flow)، سوییچر رژیم بازار و تسویه داینامیک سود.
